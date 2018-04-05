@@ -1,0 +1,148 @@
+true = "True"
+false = "False"
+isMoving = false
+lcdStr = ""
+stopDistance = 60
+slowDistance = stopDistance + 30
+frontDistanceCm = 0
+leftDistanceCm = 0
+rightDistanceCm = 0
+fastForwardSpeed = -50
+slowForwardSpeed = -20
+turnSpeed = 30  'Motors are in reverse
+turnLeftDelay = 1130
+turnRightDelay = 1180
+light = 0
+ls = 1  'light sensor
+uss = 2 'ultrasonic sensor
+gyro = 3 'gyro sensor
+testing = 0
+useGyro = 1
+
+Sub writeLcd
+  LCD.Clear()
+  LCD.StopUpdate()
+  LCD.Text(1, 5, 4, 2, lcdStr)
+  LCD.Text(1, 5, 24, 2, "F: " + frontDistanceCm)
+  LCD.Text(1, 5, 44, 2, "L: " + leftDistanceCm)
+  LCD.Text(1, 5, 64, 2, "R: " + rightDistanceCm)
+  LCD.Text(1, 5, 84, 2, "I: " + light)
+  LCD.Update()
+EndSub
+
+Sub getFrontDistance
+  Sensor.ReadRawValue(uss, 0) 'Ignore first value
+  frontDistanceCm = Sensor.ReadRawValue(uss, 0)
+  If frontDistanceCm > 2550 Then
+    frontDistanceCm = 0
+  EndIf
+  light = Sensor.ReadPercent(ls)
+  writeLcd()
+EndSub
+
+Sub getLeftRightDistance
+  Program.Delay(500)
+  Motor.Move("C", -50, 90, true)
+  While Motor.IsBusy("C")
+  EndWhile
+  Speaker.Play(80, "Sounds/Sonar")
+  Speaker.Wait()
+  Sensor.ReadRawValue(uss, 0) 'Ignore first value
+  Program.Delay(100)
+  leftDistanceCm = Sensor.ReadRawValue(uss, 0)
+  If leftDistanceCm > 2550 Then
+    leftDistanceCm = 0
+  EndIf
+  Motor.Move("C", 50, 185, true)
+  While Motor.IsBusy("C") = true
+  EndWhile
+  Speaker.Play(80, "Sounds/Sonar")
+  Speaker.Wait()
+  Sensor.ReadRawValue(uss, 0) 'Ignore first value
+  Program.Delay(100)
+  rightDistanceCm = Sensor.ReadRawValue(uss, 0)
+  If rightDistanceCm > 2550 Then
+    rightDistanceCm = 0
+  EndIf
+  Motor.Move("C", -50, 95, true)
+  While Motor.IsBusy("C")
+  EndWhile
+  Program.Delay(300)
+EndSub  
+
+Sub turnLeft
+  lcdStr = "Left"
+  writeLcd()
+  If useGyro = 1 Then
+    startAngle = Sensor.ReadRawValue(gyro, 0)
+    Motor.StartSync("AB", turnSpeed, -(turnSpeed + 10))
+    While Sensor.ReadRawValue(gyro, 0) - startAngle > -82
+    EndWhile
+  Else
+    Motor.StartSync("AB", turnSpeed, -turnSpeed)
+    Program.Delay(turnLeftDelay)
+  EndIf
+  Motor.Stop("AB", true)
+EndSub
+
+Sub turnRight
+  lcdStr = "Right"
+  writeLcd()
+  If useGyro = 1 Then
+    startAngle = Sensor.ReadRawValue(gyro, 0)
+    Motor.StartSync("AB", -(turnSpeed+10), turnSpeed)
+    While Sensor.ReadRawValue(gyro, 0) - startAngle < 80
+    EndWhile
+  Else
+    Motor.StartSync("AB", -turnSpeed, turnSpeed)
+    Program.Delay(turnRightDelay)
+  EndIf
+  Motor.Stop("AB", true)
+EndSub
+
+lcdStr = "Forward"
+getFrontDistance()
+While frontDistanceCm = 0
+  getFrontDistance()
+EndWhile
+
+If testing = 1 Then
+  'turnLeft()
+  'Program.Delay(1000)
+  turnRight()
+  Program.End()
+EndIf
+
+isMoving = true
+EV3.SetLEDColor ("GREEN", "NORMAL")
+Motor.StartSync("AB", fastForwardSpeed, fastForwardSpeed)
+While true
+  getFrontDistance()
+  While frontDistanceCm > slowDistance
+    If light < 5 Then   'End of the maze
+      Motor.Stop("AB", true)
+      EV3.SetLEDColor ("ORANGE", "FLASH")
+      Speaker.Play(100, "Sounds/Fanfare")
+      Speaker.Wait()
+      Speaker.Play(100, "Sounds/Cheering")
+      Speaker.Wait()
+      Program.End()
+    EndIf
+    getFrontDistance()
+  EndWhile
+  Motor.StartSync("AB", slowForwardSpeed, slowForwardSpeed)
+  While frontDistanceCm > stopDistance
+    getFrontDistance()
+  EndWhile
+  EV3.SetLEDColor ("RED", "NORMAL")
+  Motor.Stop("AB", false)
+  getLeftRightDistance()
+  If leftDistanceCm > rightDistanceCm Then
+    turnLeft()
+  Else
+    turnRight()
+  EndIf
+  EV3.SetLEDColor ("GREEN", "NORMAL")
+  Motor.StartSync("AB", fastForwardSpeed, fastForwardSpeed)
+EndWhile
+  
